@@ -1,0 +1,7 @@
+# Ignore given folder
+given/
+given.tar
+
+# Ignore any executables and object files
+*.o
+main
