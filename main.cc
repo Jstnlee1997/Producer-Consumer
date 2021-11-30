@@ -13,6 +13,23 @@ struct Job {
   int duration = rand() % 10 + 1;
 };
 
+struct ProducerInfo {
+  int rear;
+  int numberOfJobs;
+  Job* queuePtr;
+  friend ostream& operator<<(ostream& o, const ProducerInfo& producerInfo) {
+    return o << "Current rear: " << producerInfo.rear << endl;
+  }
+};
+
+struct ConsumerInfo {
+  int front;
+  Job* queuePtr;
+  friend ostream& operator<<(ostream& o, const ConsumerInfo& consumerInfo) {
+    return o << "Current front: " << consumerInfo.front << endl;
+  }
+};
+
 int main (int argc, char **argv)
 {
 
@@ -38,37 +55,74 @@ int main (int argc, char **argv)
     numberOfConsumers = check_arg(argv[4]);
   }
 
-  pthread_t producerid;
-  int parameter = 5;
+  // Create queue data structure
+  Job *queue = new Job[queueSize];
+  // Initialise rear and front of queue
+  int rear=0, front=0;
 
-  pthread_create (&producerid, NULL, producer, (void *) &parameter);
+  // // Creating semaphore array of 3 semaphores
+  // int semId = sem_create(SEM_KEY, 3);
 
-  pthread_join (producerid, NULL);
+  // /* Initialise Semaphores */
+  // // First semaphore is for Mutual Exclusivity
+  // int mutex = sem_init(semId, 0, 1);
+  // // Second semaphore is to check for space in buffer
+  // int space = sem_init(semId, 1, queueSize);
+  // // Third semaphore is for consumer item
+  // int item = sem_init(semId, 2, 0);
 
-  cout << "Doing some work after the join" << endl;
+  // cout << mutex << endl << space << endl << item << endl;
+
+  for (auto iterator = 0; iterator < numberOfProducers; ++iterator) {
+    // Create a thread for each producer
+    pthread_t producerid;
+    ProducerInfo producerInfo = {.rear = rear, .numberOfJobs = numberOfJobs, .queuePtr = queue};
+    
+    pthread_create (&producerid, NULL, producer, (void *) &producerInfo);
+
+    pthread_join (producerid, NULL);
+    cout << "Doing some producer work after the join" << endl;
+  }
+
+  for (auto iterator = 0; iterator < numberOfConsumers; ++iterator) {
+    // Create a thread for each consumer
+    pthread_t consumerid;
+    ConsumerInfo consumerInfo = {.front = front, .queuePtr = queue};
+
+    pthread_create (&consumerid, NULL, consumer, (void *) &consumerInfo);
+
+    pthread_join (consumerid, NULL);
+    cout << "Doing some consumer work after the join" << endl;
+  }
 
   return 0;
 }
 
-void *producer (void *parameter) 
+void *producer (void *producerInfo) 
 {
+  ProducerInfo *info = (ProducerInfo*) producerInfo;
 
-  // TODO
+  while (info->numberOfJobs > 0) {
 
-  int *param = (int *) parameter;
+    cout << *info << endl;
 
-  cout << "Parameter = " << *param << endl;
+    // Use semaphores to ensure concurrency
+    // sem_wait(info->rear, 1);
+
+    info->numberOfJobs --;
+
+  }
+  pthread_exit(0);
+
+}
+
+void *consumer (void *consumerInfo) 
+{
+    // TODO 
 
   sleep (1);
 
-  cout << "\nThat was a good sleep - thank you \n" << endl;
-
-  pthread_exit(0);
-}
-
-void *consumer (void *id) 
-{
-    // TODO 
+  cout << "\nThat was a good consumer sleep - thank you \n" << endl;
 
   pthread_exit (0);
 
