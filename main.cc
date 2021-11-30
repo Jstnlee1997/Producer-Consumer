@@ -3,13 +3,14 @@
  * example of creating and using a thread is provided.
  ******************************************************************/
 
+#include <typeinfo>
 #include "helper.h"
 
 void *producer (void *id);
 void *consumer (void *id);
 
 struct Job {
-  int id;
+  int id = -1;  // Job has no ID
   int duration = rand() % 10 + 1;
 };
 
@@ -17,17 +18,18 @@ struct ProducerInfo {
   int rear;
   int numberOfJobs;
   Job* queuePtr;
-  friend ostream& operator<<(ostream& o, const ProducerInfo& producerInfo) {
-    return o << "Current rear: " << producerInfo.rear << endl;
-  }
+  // friend ostream& operator<<(ostream& o, const ProducerInfo& producerInfo) {
+  //   // return o << "Current rear: " << producerInfo.rear << endl;
+  //   return o << "Current value of queue[rear] is: " << (producerInfo.queuePtr) << endl;
+  // }
 };
 
 struct ConsumerInfo {
   int front;
   Job* queuePtr;
-  friend ostream& operator<<(ostream& o, const ConsumerInfo& consumerInfo) {
-    return o << "Current front: " << consumerInfo.front << endl;
-  }
+  // friend ostream& operator<<(ostream& o, const ConsumerInfo& consumerInfo) {
+  //   return o << "Current front: " << consumerInfo.front << endl;
+  // }
 };
 
 int main (int argc, char **argv)
@@ -56,7 +58,8 @@ int main (int argc, char **argv)
   }
 
   // Create queue data structure
-  Job *queue = new Job[queueSize];
+  Job* queue = new Job[queueSize];
+
   // Initialise rear and front of queue
   int rear=0, front=0;
 
@@ -103,8 +106,10 @@ void *producer (void *producerInfo)
   ProducerInfo *info = (ProducerInfo*) producerInfo;
 
   while (info->numberOfJobs > 0) {
-
-    cout << *info << endl;
+    if (info->queuePtr[info->rear].id < 0) {
+      cout << "No job present!\n";
+    }
+    // cout << (info->queuePtr) << endl;
 
     // Use semaphores to ensure concurrency
     // sem_wait(info->rear, 1);
@@ -120,7 +125,7 @@ void *consumer (void *consumerInfo)
 {
     // TODO 
 
-  sleep (1);
+  // sleep (1);
 
   cout << "\nThat was a good consumer sleep - thank you \n" << endl;
 
