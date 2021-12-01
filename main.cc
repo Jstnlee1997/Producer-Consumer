@@ -20,6 +20,7 @@ struct ProducerInfo {
   int numberOfJobs;
   int queueSize;
   Job* queuePtr;
+  int semId;
 };
 
 struct ConsumerInfo {
@@ -27,6 +28,7 @@ struct ConsumerInfo {
   int front;
   int queueSize;
   Job* queuePtr;
+  int semId;
 };
 
 int main (int argc, char **argv)
@@ -61,38 +63,43 @@ int main (int argc, char **argv)
   // Initialise rear and front of queue
   int rear=0, front=0;
 
-  // // Creating semaphore array of 3 semaphores
-  // int semId = sem_create(SEM_KEY, 3);
+  // Creating semaphore array of 3 semaphores
+  int semId = sem_create(SEM_KEY, 3);
+  cout << semId << endl;
 
-  // /* Initialise Semaphores */
-  // // First semaphore is for Mutual Exclusivity
-  // int mutex = sem_init(semId, 0, 1);
-  // // Second semaphore is to check for space in buffer
-  // int space = sem_init(semId, 1, queueSize);
-  // // Third semaphore is for consumer item
-  // int item = sem_init(semId, 2, 0);
+  /* Initialise Semaphores */
+  // First semaphore is for Mutual Exclusivity
+  int mutex = sem_init(semId, 0, 1);
+  // Second semaphore is to check for space in buffer
+  int space = sem_init(semId, 1, queueSize);
+  // Third semaphore is for consumer item
+  int item = sem_init(semId, 2, 0);
 
-  // cout << mutex << endl << space << endl << item << endl;
+  cout << mutex << endl << space << endl << item << endl;
 
   for (auto iterator = 0; iterator < numberOfProducers; ++iterator) {
     // Create a thread for each producer
     pthread_t producerid;
-    ProducerInfo producerInfo = {.producerid = (iterator+1), .rear = rear, .numberOfJobs = numberOfJobs, .queueSize = queueSize, .queuePtr = queue};
+    ProducerInfo producerInfo = {.producerid = (iterator+1), .rear = rear, 
+                                  .numberOfJobs = numberOfJobs, .queueSize = queueSize, 
+                                  .queuePtr = queue, .semId = semId};
     
     pthread_create (&producerid, NULL, producer, (void *) &producerInfo);
 
-    pthread_join (producerid, NULL);
+    // pthread_join (producerid, NULL);
     cout << "Doing some producer work after the join" << endl;
   }
 
   for (auto iterator = 0; iterator < numberOfConsumers; ++iterator) {
     // Create a thread for each consumer
     pthread_t consumerid;
-    ConsumerInfo consumerInfo = {.consumerid = (iterator+1), .front = front, .queueSize = queueSize, .queuePtr = queue};
+    ConsumerInfo consumerInfo = {.consumerid = (iterator+1), .front = front, 
+                                  .queueSize = queueSize, .queuePtr = queue, 
+                                  .semId = semId};
 
     pthread_create (&consumerid, NULL, consumer, (void *) &consumerInfo);
 
-    pthread_join (consumerid, NULL);
+    // pthread_join (consumerid, NULL);
     cout << "Doing some consumer work after the join" << endl;
   }
 
@@ -104,8 +111,15 @@ void *producer (void *producerInfo)
   ProducerInfo *info = (ProducerInfo*) producerInfo;
 
   while (info->numberOfJobs > 0) {
+    // check for space
+    sem_wait(info->semId, 1);
+    // get mutual exclusiveness
+    sem_wait(info->semId, 0);
+
+    /* START OF CRITICAL SECTION */
+
+    // Add job to buffer
     if (info->queuePtr[info->rear].id < 0) {
-      cout << "No job present! Current rear: " << info->rear << endl;
       cout << "Producer(" << info->producerid << "): Job id " << info->rear 
             << " duration " << info->queuePtr[info->rear].duration << endl;
 
@@ -113,21 +127,21 @@ void *producer (void *producerInfo)
       info->queuePtr[info->rear].id = info->rear;
       info->rear++;
       if (info->rear == info->queueSize) info->rear = 0;  // implement circular queue
-
-
-      cout << "Job added! New rear: " << info->rear << endl;
-
-      // sleep for 1-5 seconds before next job can be added
-      int addJobInterval = rand() % 5 + 1;
-      cout << "Adding job interval; sleep for duration of: " << addJobInterval << endl;
-      sleep(addJobInterval);
     }
 
-    // Use semaphores to ensure concurrency
-    // sem_wait(info->rear, 1);
+    /* END OF CRITICAL SECTION */
+
+    // release mutual exclusiveness
+    sem_signal(info->semId, 0);
+    // let consumer know of job item
+    sem_signal(info->semId, 2);
+
+    // sleep for 1-5 seconds before next job can be added
+    int addJobInterval = rand() % 5 + 1;
+    cout << "Adding job interval; sleep for duration of: " << addJobInterval << endl;
+    // sleep(addJobInterval);
 
     info->numberOfJobs --;
-
   }
   pthread_exit(0);
 
@@ -136,28 +150,41 @@ void *producer (void *producerInfo)
 void *consumer (void *consumerInfo) 
 {
   ConsumerInfo *info = (ConsumerInfo*) consumerInfo;
-  cout << "Current job id: " << info->queuePtr[info->front].id << endl;
-  while (info->queuePtr[info->front].id >= 0) {
-    cout << "Job present! Current front: " << info->front << endl;
+  int sleepDuration = -1;
+
+  // Check for job item
+  sem_wait(info->semId, 2);
+  // get mutual exclusiveness
+  sem_wait(info->semId, 0);
+
+  /* START OF CRITICAL SECTION */
+
+  // get job from buffer
+  if (info->queuePtr[info->front].id >= 0) {
     cout << "Consumer(" << info->consumerid << "): Job id " << info->front 
           << " executing sleep duration " << info->queuePtr[info->front].duration << endl;
     
     // save sleep duration
-    int sleepDuration = info->queuePtr[info->front].duration;
+    sleepDuration = info->queuePtr[info->front].duration;
 
     // remove the job and increment beginning of queue
     info->queuePtr[info->front].id = -1;
     info->front++;
     if (info->front == info->queueSize) info->front = 0;  // implement circular queue
+  }
 
-    cout << "Job removed! New front: " << info->front << endl;
+  /* END OF CRITICAL SECTION */
 
+  // release mutual exclusiveness
+  sem_signal(info->semId, 0);
+  // let producer know of space
+  sem_signal(info->semId, 1);
+
+  // consume job item
+  if (sleepDuration > 0) {
     cout << "Time to sleep for: " << sleepDuration << " seconds\n";
-
     // sleep(sleepDuration);
-    cout << "\nThat was a good consumer sleep - thank you \n" << endl;
   }
 
   pthread_exit (0);
-
 }
