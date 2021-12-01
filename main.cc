@@ -10,26 +10,23 @@ void *producer (void *id);
 void *consumer (void *id);
 
 struct Job {
-  int id = -1;  // Job has no ID
+  int id = -1;  // Job has no ID yet
   int duration = rand() % 10 + 1;
 };
 
 struct ProducerInfo {
+  int producerid;
   int rear;
   int numberOfJobs;
+  int queueSize;
   Job* queuePtr;
-  // friend ostream& operator<<(ostream& o, const ProducerInfo& producerInfo) {
-  //   // return o << "Current rear: " << producerInfo.rear << endl;
-  //   return o << "Current value of queue[rear] is: " << (producerInfo.queuePtr) << endl;
-  // }
 };
 
 struct ConsumerInfo {
+  int consumerid;
   int front;
+  int queueSize;
   Job* queuePtr;
-  // friend ostream& operator<<(ostream& o, const ConsumerInfo& consumerInfo) {
-  //   return o << "Current front: " << consumerInfo.front << endl;
-  // }
 };
 
 int main (int argc, char **argv)
@@ -56,7 +53,8 @@ int main (int argc, char **argv)
     numberOfProducers = check_arg(argv[3]);
     numberOfConsumers = check_arg(argv[4]);
   }
-
+  cout << "Queue Size: " << queueSize << ", number of jobs: " << numberOfJobs << ", number of producers: " << numberOfProducers << ", number of consumers: " << numberOfConsumers << endl;
+  
   // Create queue data structure
   Job* queue = new Job[queueSize];
 
@@ -79,7 +77,7 @@ int main (int argc, char **argv)
   for (auto iterator = 0; iterator < numberOfProducers; ++iterator) {
     // Create a thread for each producer
     pthread_t producerid;
-    ProducerInfo producerInfo = {.rear = rear, .numberOfJobs = numberOfJobs, .queuePtr = queue};
+    ProducerInfo producerInfo = {.producerid = (iterator+1), .rear = rear, .numberOfJobs = numberOfJobs, .queueSize = queueSize, .queuePtr = queue};
     
     pthread_create (&producerid, NULL, producer, (void *) &producerInfo);
 
@@ -90,7 +88,7 @@ int main (int argc, char **argv)
   for (auto iterator = 0; iterator < numberOfConsumers; ++iterator) {
     // Create a thread for each consumer
     pthread_t consumerid;
-    ConsumerInfo consumerInfo = {.front = front, .queuePtr = queue};
+    ConsumerInfo consumerInfo = {.consumerid = (iterator+1), .front = front, .queueSize = queueSize, .queuePtr = queue};
 
     pthread_create (&consumerid, NULL, consumer, (void *) &consumerInfo);
 
@@ -107,9 +105,23 @@ void *producer (void *producerInfo)
 
   while (info->numberOfJobs > 0) {
     if (info->queuePtr[info->rear].id < 0) {
-      cout << "No job present!\n";
+      cout << "No job present! Current rear: " << info->rear << endl;
+      cout << "Producer(" << info->producerid << "): Job id " << info->rear 
+            << " duration " << info->queuePtr[info->rear].duration << endl;
+
+      // add a job and increment end of queue
+      info->queuePtr[info->rear].id = info->rear;
+      info->rear++;
+      if (info->rear == info->queueSize) info->rear = 0;  // implement circular queue
+
+
+      cout << "Job added! New rear: " << info->rear << endl;
+
+      // sleep for 1-5 seconds before next job can be added
+      int addJobInterval = rand() % 5 + 1;
+      cout << "Adding job interval; sleep for duration of: " << addJobInterval << endl;
+      sleep(addJobInterval);
     }
-    // cout << (info->queuePtr) << endl;
 
     // Use semaphores to ensure concurrency
     // sem_wait(info->rear, 1);
@@ -123,11 +135,28 @@ void *producer (void *producerInfo)
 
 void *consumer (void *consumerInfo) 
 {
-    // TODO 
+  ConsumerInfo *info = (ConsumerInfo*) consumerInfo;
+  cout << "Current job id: " << info->queuePtr[info->front].id << endl;
+  while (info->queuePtr[info->front].id >= 0) {
+    cout << "Job present! Current front: " << info->front << endl;
+    cout << "Consumer(" << info->consumerid << "): Job id " << info->front 
+          << " executing sleep duration " << info->queuePtr[info->front].duration << endl;
+    
+    // save sleep duration
+    int sleepDuration = info->queuePtr[info->front].duration;
 
-  // sleep (1);
+    // remove the job and increment beginning of queue
+    info->queuePtr[info->front].id = -1;
+    info->front++;
+    if (info->front == info->queueSize) info->front = 0;  // implement circular queue
 
-  cout << "\nThat was a good consumer sleep - thank you \n" << endl;
+    cout << "Job removed! New front: " << info->front << endl;
+
+    cout << "Time to sleep for: " << sleepDuration << " seconds\n";
+
+    // sleep(sleepDuration);
+    cout << "\nThat was a good consumer sleep - thank you \n" << endl;
+  }
 
   pthread_exit (0);
 
