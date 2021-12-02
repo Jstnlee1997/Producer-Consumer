@@ -103,6 +103,9 @@ int main (int argc, char **argv)
     cout << "Doing some consumer work after the join" << endl;
   }
 
+  // Clean up semaphores
+  if (sem_close(semId) < 0) cerr << "Error closing off semaphore array\n";
+
   return 0;
 }
 
@@ -113,7 +116,7 @@ void *producer (void *producerInfo)
   while (info->numberOfJobs > 0) {
     // check for space
     sem_wait(info->semId, 1);
-    // get mutual exclusiveness
+    // LOCK
     sem_wait(info->semId, 0);
 
     /* START OF CRITICAL SECTION */
@@ -131,7 +134,7 @@ void *producer (void *producerInfo)
 
     /* END OF CRITICAL SECTION */
 
-    // release mutual exclusiveness
+    // UNLOCK
     sem_signal(info->semId, 0);
     // let consumer know of job item
     sem_signal(info->semId, 2);
@@ -154,7 +157,7 @@ void *consumer (void *consumerInfo)
 
   // Check for job item
   sem_wait(info->semId, 2);
-  // get mutual exclusiveness
+  // LOCK
   sem_wait(info->semId, 0);
 
   /* START OF CRITICAL SECTION */
@@ -175,7 +178,7 @@ void *consumer (void *consumerInfo)
 
   /* END OF CRITICAL SECTION */
 
-  // release mutual exclusiveness
+  // UNLOCK
   sem_signal(info->semId, 0);
   // let producer know of space
   sem_signal(info->semId, 1);
