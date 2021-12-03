@@ -10,7 +10,7 @@
 void *producer (void *id);
 void *consumer (void *id);
 
-/* STRUCT DECLARATION */
+/* STRUCT DECLARATIONS */
 
 struct Job {
   int jobId;
@@ -19,26 +19,29 @@ struct Job {
 
 struct ProducerInfo {
   int producerid;
-  int &rear;
-  int &numberOfJobs;
+  int numberOfJobs;
   int queueSize;
   Job* queuePtr;
-  int semId;
 };
 
 struct ConsumerInfo {
   int consumerid;
-  int &front;
-  int &totalNumberOfJobsToConsume;
   int queueSize;
   Job* queuePtr;
-  int semId;
 };
+
+struct timespec timeout = {CONSUMER_TIMEOUT};
+
+/* GLOBAL VARIABLES */
+int rear = 0;
+int front = 0;
+
+int semId = sem_create(SEM_KEY, 3);
 
 int main (int argc, char **argv)
 {
   // Initialise argument line variables
-  int queueSize, numberOfJobs, numberOfProducers, numberOfConsumers, totalNumberOfJobsToConsume;
+  int queueSize, numberOfJobs, numberOfProducers, numberOfConsumers;
   
   // Ensure that there are four argument line arguments (5 including execution)
   if (argc != 5) {
@@ -55,19 +58,16 @@ int main (int argc, char **argv)
     numberOfJobs = check_arg(argv[2]);
     numberOfProducers = check_arg(argv[3]);
     numberOfConsumers = check_arg(argv[4]);
-    totalNumberOfJobsToConsume = numberOfJobs * numberOfProducers;
   }
   cout << "Queue Size: " << queueSize << ", number of jobs: " << numberOfJobs << ", number of producers: " << numberOfProducers << ", number of consumers: " << numberOfConsumers << endl;
   
   // Create queue data structure
   Job* queue = new Job[queueSize];
-  int rear=0, front=0;
-
-  // Creating semaphore array of 3 semaphores
-  int semId = sem_create(SEM_KEY, 3);
-  if (semId < 0) cerr << "Error creating semaphore array\n";
 
   /* Initialise Semaphores */
+  // Check if sempahore array initialised expectedly
+  if (semId < 0) cerr << "Error creating semaphore array\n";
+
   // First semaphore is for Mutual Exclusivity
   int mutex = sem_init(semId, 0, 1);
   // Second semaphore is to check for space in buffer
@@ -80,9 +80,8 @@ int main (int argc, char **argv)
   pthread_t thrProducers[numberOfProducers];
   for (auto iterator = 0; iterator < numberOfProducers; iterator++) {
     // Parse in producer info
-    ProducerInfo producerInfo = {.producerid = (iterator+1), .rear = rear, 
-                                  .numberOfJobs = numberOfJobs, .queueSize = queueSize, 
-                                  .queuePtr = queue, .semId = semId};
+    ProducerInfo producerInfo = {.producerid = (iterator+1), .numberOfJobs = numberOfJobs, 
+                                  .queueSize = queueSize, .queuePtr = queue};
 
     pthread_create (&thrProducers[iterator], NULL, producer, (void *) &producerInfo);
   }
@@ -91,10 +90,8 @@ int main (int argc, char **argv)
   pthread_t thrConsumers[numberOfConsumers];
   for (auto iterator = 0; iterator < numberOfConsumers; iterator++) {
     // Parse in consumer info
-    ConsumerInfo consumerInfo = {.consumerid = (iterator+1), .front = front, 
-                                  .totalNumberOfJobsToConsume = totalNumberOfJobsToConsume, .queueSize = queueSize, 
-                                  .queuePtr = queue, .semId = semId};
-    cout << "Consumer info front: " << consumerInfo.front << endl;
+    ConsumerInfo consumerInfo = {.consumerid = (iterator+1), .queueSize = queueSize, 
+                                  .queuePtr = queue};
 
     pthread_create (&thrConsumers[iterator], NULL, consumer, (void *) &consumerInfo);
   }
@@ -123,27 +120,27 @@ void *producer (void *producerInfo)
   while (info->numberOfJobs > 0) {
     cout << "Number of jobs for current producer: " << info->numberOfJobs << endl;
     // check for space
-    sem_wait(info->semId, 1);
+    sem_wait(semId, 1);
     // LOCK
-    sem_wait(info->semId, 0);
+    sem_wait(semId, 0);
 
     /* START OF CRITICAL SECTION */
 
     // Add job to buffer
-    info->queuePtr[info->rear].jobId = info->rear;
-    info->queuePtr[info->rear].duration = rand() % 10 + 1;
-    cout << "Producer(" << info->producerid << "): Job id " << info->rear 
-          << " duration " << info->queuePtr[info->rear].duration << endl;
+    info->queuePtr[rear].jobId = rear;
+    info->queuePtr[rear].duration = rand() % 10 + 1;
+    cout << "Producer(" << info->producerid << "): Job id " << rear 
+          << " duration " << info->queuePtr[rear].duration << endl;
 
     // increment end of queue and implement circular queue
-    info->rear = (info->rear + 1)%(info->queueSize);
+    rear = (rear + 1)%(info->queueSize);
 
     /* END OF CRITICAL SECTION */
 
     // UNLOCK
-    sem_signal(info->semId, 0);
+    sem_signal(semId, 0);
     // let consumer know of job item
-    sem_signal(info->semId, 2);
+    sem_signal(semId, 2);
 
     // sleep for 1-5 seconds before next job can be added
     int addJobInterval = rand() % 5 + 1;
@@ -160,41 +157,40 @@ void *consumer (void *consumerInfo)
 {
   ConsumerInfo *info = (ConsumerInfo*) consumerInfo;
 
-  // cout << "Consumer info front: " << info->front << endl;
-
-  while(info->totalNumberOfJobsToConsume > 0) {
-    cout << "Total number of jobs left to consume: " << info->totalNumberOfJobsToConsume << endl;
+  while(1) {
     int sleepDuration;
 
     // Check for job item
-    sem_wait(info->semId, 2);
+    if (sem_wait(semId, 2, &timeout) < 0) {
+      cerr << "Consumer waited for too long\n";
+      break;
+    } 
+
     // LOCK
-    sem_wait(info->semId, 0);
+    sem_wait(semId, 0);
 
     /* START OF CRITICAL SECTION */
 
     // get job from buffer
-    cout << "Consumer(" << info->consumerid << "): Job id " << info->front 
-          << " executing sleep duration " << info->queuePtr[info->front].duration << endl;
+    cout << "Consumer(" << info->consumerid << "): Job id " << front 
+          << " executing sleep duration " << info->queuePtr[front].duration << endl;
     
     // save sleep duration
-    sleepDuration = info->queuePtr[info->front].duration;
+    sleepDuration = info->queuePtr[front].duration;
 
     // increment beginning of queue and implement circular queue
-    info->front = (info->front + 1)%(info->queueSize);
+    front = (front + 1)%(info->queueSize);
 
     /* END OF CRITICAL SECTION */
 
     // UNLOCK
-    sem_signal(info->semId, 0);
+    sem_signal(semId, 0);
     // let producer know of space
-    sem_signal(info->semId, 1);
+    sem_signal(semId, 1);
 
     // consume job item
     cout << "Time to sleep for: " << sleepDuration << " seconds\n";
     sleep(1); // THIS NEEDS TO BE CHANGED
-
-    info->totalNumberOfJobsToConsume--;
   }
 
   pthread_exit (0);

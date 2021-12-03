@@ -22,6 +22,7 @@
 using namespace std;
 
 # define SEM_KEY 0x01 // Change this number as needed
+# define CONSUMER_TIMEOUT 20
 
 union semun {
     int val;               /* used for SETVAL only */
@@ -33,5 +34,6 @@ int check_arg (char *);
 int sem_create (key_t, int);
 int sem_init (int, int, int);
 void sem_wait (int, short unsigned int);
+int sem_wait(int id, short unsigned int num, timespec *timeout);
 void sem_signal (int, short unsigned int);
 int sem_close (int);
