@@ -5,6 +5,9 @@
 
 #include "helper.h"
 
+/* GLOBAL CONSTANTS */
+# define CONSUMER_TIMEOUT 3
+
 /* FUNCTION DECLARATIONS */
 
 void *producer (void *id);
@@ -115,10 +118,9 @@ int main (int argc, char **argv)
 void *producer (void *producerInfo) 
 {
   ProducerInfo *info = (ProducerInfo*) producerInfo;
-  cout << "producer info: number of jobs: " << info->numberOfJobs << endl;
 
   while (info->numberOfJobs > 0) {
-    cout << "Number of jobs for current producer: " << info->numberOfJobs << endl;
+    cout << "Remaining number of jobs: " << info->numberOfJobs << endl;
     // check for space
     sem_wait(semId, 1);
     // LOCK
@@ -133,7 +135,8 @@ void *producer (void *producerInfo)
           << " duration " << info->queuePtr[rear].duration << endl;
 
     // increment end of queue and implement circular queue
-    rear = (rear + 1)%(info->queueSize);
+    rear ++;
+    if (rear == info->queueSize) rear = 0;
 
     /* END OF CRITICAL SECTION */
 
@@ -144,11 +147,11 @@ void *producer (void *producerInfo)
 
     // sleep for 1-5 seconds before next job can be added
     int addJobInterval = rand() % 5 + 1;
-    cout << "Adding job interval; sleep for duration of: " << addJobInterval << endl;
-    sleep(1); // THIS NEEDS TO BE CHANGED
+    sleep(addJobInterval);
 
     info->numberOfJobs --;
   }
+  cout << "Producer(" << info->producerid << "): No more jobs to generate.\n";
 
   pthread_exit(0);
 }
@@ -162,7 +165,7 @@ void *consumer (void *consumerInfo)
 
     // Check for job item
     if (sem_wait(semId, 2, &timeout) < 0) {
-      cerr << "Consumer waited for too long\n";
+      cout << "Consumer(" << info->consumerid << "): No more jobs left.\n";
       break;
     } 
 
@@ -179,7 +182,8 @@ void *consumer (void *consumerInfo)
     sleepDuration = info->queuePtr[front].duration;
 
     // increment beginning of queue and implement circular queue
-    front = (front + 1)%(info->queueSize);
+    front ++;
+    if (front == info->queueSize) front = 0;
 
     /* END OF CRITICAL SECTION */
 
@@ -190,7 +194,7 @@ void *consumer (void *consumerInfo)
 
     // consume job item
     cout << "Time to sleep for: " << sleepDuration << " seconds\n";
-    sleep(1); // THIS NEEDS TO BE CHANGED
+    sleep(sleepDuration);
   }
 
   pthread_exit (0);
