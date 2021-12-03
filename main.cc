@@ -25,6 +25,11 @@ struct ProducerInfo {
   int numberOfJobs;
   int queueSize;
   Job* queuePtr;
+
+  friend ostream& operator<<(ostream &o, const ProducerInfo p) {
+    return o << "Producer id: " << p.producerid << " , number of jobs: "<< p.numberOfJobs 
+              << ", queue size: " << p.queueSize << endl;
+  };
 };
 
 struct ConsumerInfo {
@@ -83,20 +88,26 @@ int main (int argc, char **argv)
   pthread_t thrProducers[numberOfProducers];
   for (auto iterator = 0; iterator < numberOfProducers; iterator++) {
     // Parse in producer info
-    ProducerInfo producerInfo = {.producerid = (iterator+1), .numberOfJobs = numberOfJobs, 
-                                  .queueSize = queueSize, .queuePtr = queue};
+    cout << "Before parsing into pthread, number of jobs: " << numberOfJobs << endl;
+    ProducerInfo* producerInfo = new ProducerInfo;
+    producerInfo->producerid = (iterator+1);
+    producerInfo->numberOfJobs = numberOfJobs;
+    producerInfo->queueSize = queueSize;
+    producerInfo->queuePtr = queue;
 
-    pthread_create (&thrProducers[iterator], NULL, producer, (void *) &producerInfo);
+    pthread_create (&thrProducers[iterator], NULL, producer, (void *) producerInfo);
   }
 
   // Create a thread for each consumer
   pthread_t thrConsumers[numberOfConsumers];
   for (auto iterator = 0; iterator < numberOfConsumers; iterator++) {
     // Parse in consumer info
-    ConsumerInfo consumerInfo = {.consumerid = (iterator+1), .queueSize = queueSize, 
-                                  .queuePtr = queue};
+    ConsumerInfo* consumerInfo = new ConsumerInfo;
+    consumerInfo->consumerid = (iterator+1);
+    consumerInfo->queueSize = queueSize;
+    consumerInfo->queuePtr = queue;
 
-    pthread_create (&thrConsumers[iterator], NULL, consumer, (void *) &consumerInfo);
+    pthread_create (&thrConsumers[iterator], NULL, consumer, (void *) consumerInfo);
   }
 
   // Block until all threads complete
