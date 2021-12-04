@@ -6,7 +6,7 @@
 #include "helper.h"
 
 /* GLOBAL CONSTANTS */
-# define CONSUMER_TIMEOUT 3
+# define CONSUMER_TIMEOUT 20
 
 /* FUNCTION DECLARATIONS */
 void *producer (void *id);
