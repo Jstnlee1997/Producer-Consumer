@@ -6,7 +6,7 @@
 #include "helper.h"
 
 /* GLOBAL CONSTANTS */
-# define CONSUMER_TIMEOUT 3
+# define CONSUMER_TIMEOUT 20
 
 /* FUNCTION DECLARATIONS */
 
@@ -67,7 +67,8 @@ int main (int argc, char **argv)
     numberOfProducers = check_arg(argv[3]);
     numberOfConsumers = check_arg(argv[4]);
   }
-  cout << "Queue Size: " << queueSize << ", number of jobs: " << numberOfJobs << ", number of producers: " << numberOfProducers << ", number of consumers: " << numberOfConsumers << endl;
+  cout << "Queue Size = " << queueSize << ", Number of Jobs produced per producer = " << numberOfJobs 
+        << ", Number of producers = " << numberOfProducers << ", and Number of consumers = " << numberOfConsumers << endl;
   
   // Create queue data structure
   Job* queue = new Job[queueSize];
@@ -88,12 +89,7 @@ int main (int argc, char **argv)
   pthread_t thrProducers[numberOfProducers];
   for (auto iterator = 0; iterator < numberOfProducers; iterator++) {
     // Parse in producer info
-    cout << "Before parsing into pthread, number of jobs: " << numberOfJobs << endl;
-    ProducerInfo* producerInfo = new ProducerInfo;
-    producerInfo->producerid = (iterator+1);
-    producerInfo->numberOfJobs = numberOfJobs;
-    producerInfo->queueSize = queueSize;
-    producerInfo->queuePtr = queue;
+    ProducerInfo* producerInfo = new ProducerInfo {(iterator+1), numberOfJobs, queueSize, queue};
 
     pthread_create (&thrProducers[iterator], NULL, producer, (void *) producerInfo);
   }
@@ -102,10 +98,7 @@ int main (int argc, char **argv)
   pthread_t thrConsumers[numberOfConsumers];
   for (auto iterator = 0; iterator < numberOfConsumers; iterator++) {
     // Parse in consumer info
-    ConsumerInfo* consumerInfo = new ConsumerInfo;
-    consumerInfo->consumerid = (iterator+1);
-    consumerInfo->queueSize = queueSize;
-    consumerInfo->queuePtr = queue;
+    ConsumerInfo* consumerInfo = new ConsumerInfo {(iterator+1), queueSize, queue};
 
     pthread_create (&thrConsumers[iterator], NULL, consumer, (void *) consumerInfo);
   }
@@ -113,11 +106,9 @@ int main (int argc, char **argv)
   // Block until all threads complete
   for (auto iterator = 0; iterator < numberOfProducers; iterator++) {
     if (pthread_join(thrProducers[iterator], NULL) != 0) cerr << "Error joining producer threads\n";
-    else cout << "Doing some producer work after the join!\n";
   }
   for (auto iterator = 0; iterator < numberOfConsumers; iterator++) {
     if (pthread_join(thrConsumers[iterator], NULL) != 0) cerr << "Error joining consumer threads\n";
-    else cout << "Doing some consumer work after the join!\n";
   }
   
   // Clean up semaphores
@@ -131,7 +122,6 @@ void *producer (void *producerInfo)
   ProducerInfo *info = (ProducerInfo*) producerInfo;
 
   while (info->numberOfJobs > 0) {
-    cout << "Remaining number of jobs: " << info->numberOfJobs << endl;
     // check for space
     sem_wait(semId, 1);
     // LOCK
@@ -156,13 +146,15 @@ void *producer (void *producerInfo)
     // let consumer know of job item
     sem_signal(semId, 2);
 
-    // sleep for 1-5 seconds before next job can be added
-    int addJobInterval = rand() % 5 + 1;
-    sleep(addJobInterval);
-
     info->numberOfJobs --;
+    if (info->numberOfJobs == 0) {
+      cout << "Producer(" << info->producerid << "): No more jobs to generate.\n";
+    } else {
+      // sleep for 1-5 seconds before next job can be added
+      int addJobInterval = rand() % 5 + 1;
+      sleep(addJobInterval);
+    }
   }
-  cout << "Producer(" << info->producerid << "): No more jobs to generate.\n";
 
   pthread_exit(0);
 }
@@ -172,6 +164,7 @@ void *consumer (void *consumerInfo)
   ConsumerInfo *info = (ConsumerInfo*) consumerInfo;
 
   while(1) {
+    int jobId;
     int sleepDuration;
 
     // Check for job item
@@ -186,7 +179,8 @@ void *consumer (void *consumerInfo)
     /* START OF CRITICAL SECTION */
 
     // get job from buffer
-    cout << "Consumer(" << info->consumerid << "): Job id " << front 
+    jobId = front;
+    cout << "Consumer(" << info->consumerid << "): Job id " << jobId 
           << " executing sleep duration " << info->queuePtr[front].duration << endl;
     
     // save sleep duration
@@ -204,8 +198,9 @@ void *consumer (void *consumerInfo)
     sem_signal(semId, 1);
 
     // consume job item
-    cout << "Time to sleep for: " << sleepDuration << " seconds\n";
     sleep(sleepDuration);
+    cout << "Consumer(" << info->consumerid << "): Job id " << jobId 
+          << " completed" << endl;
   }
 
   pthread_exit (0);
