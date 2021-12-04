@@ -9,12 +9,10 @@
 # define CONSUMER_TIMEOUT 20
 
 /* FUNCTION DECLARATIONS */
-
 void *producer (void *id);
 void *consumer (void *id);
 
 /* STRUCT DECLARATIONS */
-
 struct Job {
   int jobId;
   int duration;
@@ -36,6 +34,10 @@ struct ConsumerInfo {
   int consumerid;
   int queueSize;
   Job* queuePtr;
+
+  friend ostream& operator<<(ostream &o, const ConsumerInfo p) {
+    return o << "Consumer id: " << p.consumerid << ", queue size: " << p.queueSize << endl;
+  };
 };
 
 struct timespec timeout = {CONSUMER_TIMEOUT};
@@ -43,7 +45,7 @@ struct timespec timeout = {CONSUMER_TIMEOUT};
 /* GLOBAL VARIABLES */
 int rear = 0;
 int front = 0;
-
+// Create semaphore array
 int semId = sem_create(SEM_KEY, 3);
 
 int main (int argc, char **argv)
@@ -92,6 +94,7 @@ int main (int argc, char **argv)
     ProducerInfo* producerInfo = new ProducerInfo {(iterator+1), numberOfJobs, queueSize, queue};
 
     pthread_create (&thrProducers[iterator], NULL, producer, (void *) producerInfo);
+
   }
 
   // Create a thread for each consumer
@@ -101,6 +104,7 @@ int main (int argc, char **argv)
     ConsumerInfo* consumerInfo = new ConsumerInfo {(iterator+1), queueSize, queue};
 
     pthread_create (&thrConsumers[iterator], NULL, consumer, (void *) consumerInfo);
+
   }
 
   // Block until all threads complete
@@ -110,6 +114,8 @@ int main (int argc, char **argv)
   for (auto iterator = 0; iterator < numberOfConsumers; iterator++) {
     if (pthread_join(thrConsumers[iterator], NULL) != 0) cerr << "Error joining consumer threads\n";
   }
+
+  delete queue;
   
   // Clean up semaphores
   if (sem_close(semId) < 0) cerr << "Error closing off semaphore array\n";
@@ -146,6 +152,7 @@ void *producer (void *producerInfo)
     // let consumer know of job item
     sem_signal(semId, 2);
 
+    // decrement number of jobs left to produce
     info->numberOfJobs --;
     if (info->numberOfJobs == 0) {
       cout << "Producer(" << info->producerid << "): No more jobs to generate.\n";
@@ -172,7 +179,6 @@ void *consumer (void *consumerInfo)
       cout << "Consumer(" << info->consumerid << "): No more jobs left.\n";
       break;
     } 
-
     // LOCK
     sem_wait(semId, 0);
 
