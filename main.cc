@@ -6,7 +6,7 @@
 #include "helper.h"
 
 /* GLOBAL CONSTANTS */
-# define CONSUMER_TIMEOUT 20
+# define CONSUMER_TIMEOUT 3
 
 /* FUNCTION DECLARATIONS */
 void *producer (void *id);
@@ -61,13 +61,21 @@ int main (int argc, char **argv)
 
   // Receive input of command line arguments and ensure that they are appropriate
   if (check_arg(argv[1]) == -1 || check_arg(argv[2]) == -1 || check_arg(argv[3]) == -1 || check_arg(argv[4]) == -1) {
-    cerr << "Argument line arguments have to be integers!\n";
+    cerr << "Argument line arguments have to be positive integers!\n";
     return 0;
   } else {
     queueSize = check_arg(argv[1]);
     numberOfJobs = check_arg(argv[2]);
     numberOfProducers = check_arg(argv[3]);
     numberOfConsumers = check_arg(argv[4]);
+    if (queueSize == 0) {
+      cerr << "Queue Size must be more than 0!\n";
+      return 0;
+    }
+    if (numberOfConsumers == 0) {
+      cerr << "Number of consumers must be more than 0!\n";
+      return 0;
+    }
   }
   cout << "Queue Size = " << queueSize << ", Number of Jobs produced per producer = " << numberOfJobs 
         << ", Number of producers = " << numberOfProducers << ", and Number of consumers = " << numberOfConsumers << endl;
